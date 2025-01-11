@@ -1,0 +1,21 @@
+{
+    "364599050": {
+        "selected_model": "gpt-4o-mini",
+        "messages": [
+            {
+                "role": "assistant",
+                "content": "Hello! How can I assist you today?"
+            },
+            {
+                "role": "assistant",
+                "content": "I don't have access to personal information about you, including your name. My responses are based solely on the text you provide in this chat. How can I assist you today?"
+            },
+            {
+                "role": "assistant",
+                "content": "I'm sorry, but I don't have access to previous messages or any chat history. Each session is treated as a new conversation, and I can't recall past interactions. How can I assist you today?"
+            }
+        ],
+        "memory": false,
+        "x_vqd": "4-117917866797932212146867178963400937083"
+    }
+}

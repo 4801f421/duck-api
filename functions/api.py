@@ -1,7 +1,7 @@
 import aiohttp
-import asyncio
 import json
 import logging
+import os
 
 # Configure logging
 logging.basicConfig(
@@ -10,12 +10,30 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
+
 class DuckDuckGoChatAPI:
-    def __init__(self):
+ 
+    def __init__(self, user_id : str , model = "gpt-4o-mini"):
         self.base_url = "https://duckduckgo.com/duckchat/v1"
         self.x_vqd = None
-        self.messages = []
-        self.model = "gpt-4o-mini" # one of these: "gpt-4o-mini", "claude-3-haiku-20240307", "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo", "mistralai/Mixtral-8x7B-Instruct-v0.1"
+        self.user_id = user_id
+        self.model = model
+        self.data = self.load_user_data()
+
+
+    def load_user_data(self):
+        """Load user data from users.json."""
+        with open("users.json", "r") as file:
+            users = json.load(file)
+            return users
+
+
+    def save_user_data(self):
+        """Save user data to users.json."""
+        with open("users.json", "r+") as file:
+            json.dump(self.data, file, indent=4)
+            file.truncate()
+
 
     async def get_status(self):
         """Send a status request to get the x-vqd value."""
@@ -41,23 +59,35 @@ class DuckDuckGoChatAPI:
             async with session.get(url, headers=headers) as response:
                 if response.status == 200:
                     self.x_vqd = response.headers.get("x-vqd-4")
+                    self.data[self.user_id]["x_vqd"] = self.x_vqd  # ذخیره x_vqd در داده‌های کاربر
+                    self.save_user_data()  # ذخیره داده‌های کاربر در فایل JSON
                     logging.info(f"Received x-vqd: {self.x_vqd}")
                 else:
                     logging.error("Failed to get status: %s", response.status)
 
+
     async def send_chat(self, user_message):
         """Send a chat message to the API and return the response as a single string."""
         if not self.x_vqd:
-            logging.warning("x-vqd is not set. Please call get_status() first.")
-            return
+            # اگر x_vqd ذخیره‌شده وجود دارد، از آن استفاده کنید
+            if self.data[self.user_id].get("x_vqd"):
+                self.x_vqd = self.data[self.user_id]["x_vqd"]
+            else:
+                logging.warning("x-vqd is not set. Please call get_status() first.")
+                return
 
-        self.messages.append({"role": "user", "content": user_message})
-
-        payload = {
-            "model": self.model,
-            "messages": self.messages
-        }
-
+        if self.data[self.user_id]["memory"]:
+            self.data[self.user_id]["messages"].append({"role": "user", "content": user_message})
+            payload = {
+            "model": self.data[self.user_id]["selected_model"],
+            "messages": self.data[self.user_id]["messages"]
+            }
+        else:
+            payload = {
+                "model": self.data[self.user_id]["selected_model"],
+                "messages": [{"role": "user", "content": user_message}]
+                }
+        
         headers = {
             "accept": "text/event-stream",
             "accept-language": "en-US,en;q=0.9,fa;q=0.8",
@@ -77,6 +107,7 @@ class DuckDuckGoChatAPI:
             async with session.post(f"{self.base_url}/chat", headers=headers, json=payload) as response:
                 if response.status == 200:
                     self.x_vqd = response.headers.get("x-vqd-4")
+                    self.data[self.user_id]["x_vqd"] = self.x_vqd  # به‌روزرسانی x_vqd در داده‌های کاربر
                     full_response = ""
                     async for line in response.content:
                         decoded_line = line.decode('utf-8')
@@ -84,14 +115,15 @@ class DuckDuckGoChatAPI:
                             json_data = decoded_line[5:].strip()
                             try:
                                 if json_data == "[DONE][LIMIT_CONVERSATION]":
-                                    full_response += "محدودیت مکالمه به پایان رسیده و بیشتر از این نمی‌شود ادامه داد."
+                                    full_response += "\n\n\n the limit of this conversation has been reached. please start a new one."
                                 else:
                                     message_data = json.loads(json_data)
                                     if "message" in message_data:
-                                        full_response += message_data["message"] + " "
+                                        full_response += message_data["message"]
                             except json.JSONDecodeError:
                                 logging.error("Failed to decode JSON: %s", json_data)
-                    self.messages.append({"role": "assistant", "content": full_response.strip()})
+                    self.data[self.user_id]["messages"].append({"role": "assistant", "content": full_response.strip()})
+                    self.save_user_data()  # ذخیره‌سازی داده‌های کاربر
                     return full_response.strip()
                 else:
                     logging.error("Failed to send chat: %s", response.status)
