@@ -5,15 +5,17 @@ import logging
 
 # Configure logging
 logging.basicConfig(
-    filename='logs.log',  # Log file name
-    level=logging.DEBUG,  # Log level
-    format='%(asctime)s - %(levelname)s - %(message)s'  # Log format
+    filename='logs.log',
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
 class DuckDuckGoChatAPI:
     def __init__(self):
         self.base_url = "https://duckduckgo.com/duckchat/v1"
         self.x_vqd = None
+        self.messages = []
+        self.model = "gpt-4o-mini" # one of these: "gpt-4o-mini", "claude-3-haiku-20240307", "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo", "mistralai/Mixtral-8x7B-Instruct-v0.1"
 
     async def get_status(self):
         """Send a status request to get the x-vqd value."""
@@ -43,17 +45,17 @@ class DuckDuckGoChatAPI:
                 else:
                     logging.error("Failed to get status: %s", response.status)
 
-    async def send_chat(self, message):
+    async def send_chat(self, user_message):
         """Send a chat message to the API and return the response as a single string."""
         if not self.x_vqd:
             logging.warning("x-vqd is not set. Please call get_status() first.")
             return
 
+        self.messages.append({"role": "user", "content": user_message})
+
         payload = {
-            "model": "gpt-4o-mini",
-            "messages": [
-                {"role": "user", "content": message}
-            ]
+            "model": self.model,
+            "messages": self.messages
         }
 
         headers = {
@@ -74,18 +76,22 @@ class DuckDuckGoChatAPI:
         async with aiohttp.ClientSession() as session:
             async with session.post(f"{self.base_url}/chat", headers=headers, json=payload) as response:
                 if response.status == 200:
+                    self.x_vqd = response.headers.get("x-vqd-4")
                     full_response = ""
                     async for line in response.content:
                         decoded_line = line.decode('utf-8')
                         if decoded_line.startswith("data:"):
                             json_data = decoded_line[5:].strip()
                             try:
-                                message_data = json.loads(json_data)
-                                if "message" in message_data:
-                                    full_response += message_data["message"] + " "
+                                if json_data == "[DONE][LIMIT_CONVERSATION]":
+                                    full_response += "محدودیت مکالمه به پایان رسیده و بیشتر از این نمی‌شود ادامه داد."
+                                else:
+                                    message_data = json.loads(json_data)
+                                    if "message" in message_data:
+                                        full_response += message_data["message"] + " "
                             except json.JSONDecodeError:
                                 logging.error("Failed to decode JSON: %s", json_data)
+                    self.messages.append({"role": "assistant", "content": full_response.strip()})
                     return full_response.strip()
                 else:
                     logging.error("Failed to send chat: %s", response.status)
-                    return None
