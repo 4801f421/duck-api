@@ -9,6 +9,7 @@ MODEL_SYNONYMS = {
     "model_claude3": "claude-3-haiku-20240307",
     "model_llama31": "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
     "model_mixtral": "mistralai/Mixtral-8x7B-Instruct-v0.1",
+    "model_o3mini": "o3-mini"
 }
 
 
@@ -60,6 +61,9 @@ class CommandHandlers:
             [
                 InlineKeyboardButton("Llama 3.1", callback_data="model_llama31"),
                 InlineKeyboardButton("Mixtral", callback_data="model_mixtral"),
+            ],
+            [
+                InlineKeyboardButton("o3-mini (reasoning)", callback_data="model_o3mini")
             ],
             [
                 InlineKeyboardButton(memory_text, callback_data="toggle_memory"),
