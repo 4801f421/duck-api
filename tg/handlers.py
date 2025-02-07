@@ -83,38 +83,46 @@ class MessageHandlers:
         ]
 
 
+
     async def chat(self, update: Update, context: CallbackContext):
         message = update.message.text
-        if message.startswith('gpt'):
-            message = message[3:].strip()
-            user_id = str(update.effective_user.id)
-            api = DuckDuckGoChatAPI(user_id=user_id)
-            
-            # بررسی وجود کاربر در داده‌ها
-            if user_id not in api.data:
-                print("User not found")
-                api.data[user_id] = {
-                    "selected_model": "gpt-4o-mini",
-                    "messages": [],
-                    "memory": True,
-                    "x_vqd": None
-                }
-                api.save_user_data()
+        user_id = str(update.effective_user.id)
+        api = DuckDuckGoChatAPI(user_id=user_id)
 
+        # بررسی وجود کاربر در داده‌ها
+        if user_id not in api.data:
+            api.data[user_id] = {
+                "selected_model": "gpt-4o-mini",
+                "messages": [],
+                "memory": True,
+                "x_vqd": None
+            }
+            api.save_user_data()
 
-            if not api.data[user_id].get("memory", True):
-                print("Memory is disabled")
+        if update.message.chat.type in ['group', 'supergroup']:
+            if not message.startswith('gpt'):
+                return
+
+            temp_memory = api.data[user_id]["memory"]
+            api.data[user_id]["memory"] = False
+
+        else:
+            temp_memory = api.data[user_id]["memory"]
+
+        if not api.data[user_id].get("memory", True):
+            await api.get_status()
+
+        else:
+            if not api.data[user_id].get("x_vqd"):
                 await api.get_status()
 
-            else:
-                print("Memory is enabled")
-                if not api.data[user_id].get("x_vqd"):
-                    print("x_vqd is not available")
-                    await api.get_status()
-    
-            # ارسال پیام و دریافت پاسخ
-            response = await api.send_chat(message)
-            await update.message.reply_text(response)
+        response = await api.send_chat(message)
+
+        if update.message.chat.type in ['group', 'supergroup']:
+            api.data[user_id]["memory"] = temp_memory
+
+        await update.message.reply_text(response)
+
 
 
     def get_handlers(self):
